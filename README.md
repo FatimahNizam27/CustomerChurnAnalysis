@@ -6,3 +6,5 @@ In this project ANOVA is considered as a regression method. We are trying to ide
 Chi Square test is used to determine is there any relationship between the income category and the educational level. The p-value is also used to determine whether the null hypothesis is accepted or not.
 
 For the classification modelling, decision trees and extreme gradient modelling are used for easier comparison between its accuracy. 
+
+Video Link : https://youtu.be/hBDsE8l6PQg
