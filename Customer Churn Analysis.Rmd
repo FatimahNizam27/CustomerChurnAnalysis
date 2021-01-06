@@ -1,0 +1,504 @@
+---
+title: "Customer Churn Analysis"
+author: "Fatimah Nizam  - 17218825, Ilani Dayana s2003292"
+date: "1/1/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+## **Information Regarding the Dataset**
+
+The **dataset BankChurners.csv** is obtained from: https://www.kaggle.com/sakshigoyal7/credit-card-customers?select=BankChurners.csv
+
+**The purpose of using the Dataset:**
+
+Customer Churn or known as customer attrition happens when a company loss clients or its customers. Bank, insurance and telecommunication companies use customer churn analysis to analyze which existing customers more likely have the potential to leave the companies' services. To retain existing customers cost lesser than finding new ones. This analysis focuses on analyzing the behaviour of bank customers who are more likely to close their accounts according to the other customers' historical data. 
+
+**Problem Statement:**
+1. Is there any significant difference between the customer age and income category?
+2. Is there any relationship exists between the exists betwwen the income category and education level?
+3. Which classification algorithms performance in the Customer Churn Prediction has a better accuracy? 
+
+**Objectives/Goal:**
+
+1. To determine the correlation for income category on education level using chi-square.
+2. To determine is there are any significance difference between customer age and income category using ANOVA table.
+3. To conduct the Customer Churn Prediction by using regression and classification algorithms such as Classification Tree and Extreme Gradient Boosting.
+
+### **1. Import Libraries**
+```{r}
+#install.packages('ggcorrplot')
+#install.packages('caTools')
+#install.packages('DMwR')
+#install.packages('xgboost')
+#install.packages('ROCR')
+#install.packages('janitor')
+```
+
+The purposes of the libraries are:
+
+library(ggcorrplot)   : Correlation Matrix\
+library(tidyverse)    : Data cleaning\
+library(caret)        : Data Cleaning\
+library(knitr)        : Create table comparison\
+library(caTools)      : Fast calculation of AUC, LogitBoost Classifier\ 
+library(DMwR)         : Data Mining\
+library(xgboost)      : Extreme Gradient Boosting Algorithm\
+library(ROCR)         : AUC Curve\
+
+
+```{r}
+library(ggcorrplot)
+library(tidyverse)
+library(caret)
+library(knitr)
+library(caTools)
+library(DMwR)
+library(e1071)
+library(xgboost)
+library(ROCR)
+```
+
+```{r}
+
+library(tinytex)
+library(janitor)
+```
+
+### **2. Data Extraction**
+
+The data is extracted from a csv file called BankChurners.csv. The dimension, summary and the class of the data are obtained.
+
+```{r}
+#set the working directory
+setwd("C:/Users/lenovo/Documents/R/Practice/Project")
+#Import the data
+BankData <- read.csv(file = 'BankChurners.csv')
+head(BankData)
+#The data is converted to dataframe
+class(BankData)
+str(BankData)
+summary(BankData)
+dim(BankData)
+```
+### **3. Data Wrangling**
+
+Remove the columns/features that are not used in the data analysis and convert the neccessary features to factors. Remove the NA or Null values.
+
+```{r}
+#Remove the unwanted column and convert the necessary features into factors
+BankData <- BankData %>% 
+  dplyr::select(-CLIENTNUM, -Marital_Status, -Dependent_count, -Total_Relationship_Count, -Contacts_Count_12_mon , -Total_Revolving_Bal, -Avg_Open_To_Buy , -Total_Amt_Chng_Q4_Q1 , -Total_Trans_Amt, -Total_Trans_Ct, -Total_Ct_Chng_Q4_Q1 , -Avg_Utilization_Ratio , -Naive_Bayes_Classifier_Attrition_Flag_Card_Category_Contacts_Count_12_mon_Dependent_count_Education_Level_Months_Inactive_12_mon_1 , -Months_Inactive_12_mon, -Naive_Bayes_Classifier_Attrition_Flag_Card_Category_Contacts_Count_12_mon_Dependent_count_Education_Level_Months_Inactive_12_mon_2) %>% 
+  mutate(Attrition_Flag = as.factor(Attrition_Flag),
+         Gender = as.factor(Gender),
+         Education_Level = as.factor(Education_Level),
+         Card_Category = as.factor(Card_Category),
+         Income_Category = as.factor(Income_Category))
+#Check NA
+sapply(BankData, function(x) sum(is.na(x)))
+
+```
+```{r}
+BankData
+```
+### **4. Exploratory Data Analysis (EDA)**
+EDA is done to see the patterns of the data and to extract some insights from it.
+
+1. To see the number of churn customers and non-churned customers
+```{r}
+ggplot(BankData, aes(Attrition_Flag, fill = Attrition_Flag)) +
+  geom_bar() +
+  theme(legend.position = 'none')
+
+```
+
+```{r}
+table(BankData$Attrition_Flag)
+
+```
+2. Continous Variable Distribution
+```{r}
+BankData %>%
+  keep(is.numeric) %>%
+  gather() %>%
+  ggplot() +
+  geom_histogram(mapping = aes(x=value,fill=key), color="black") +
+  facet_wrap(~ key, scales = "free") +
+  theme_minimal() +
+  theme(legend.position = 'none')
+
+```
+From the result we can see that:
+
+- The credit limit is skewed to the right.
+
+- The custmer age almost have a normal distribution.
+
+- The highest period of relationship with the bank would be around 35 months.
+
+3. Correlation Matrix
+
+
+```{r}
+corMatrix <- names(which(sapply(BankData, is.numeric)))
+corr <- cor(BankData[,corMatrix], use = 'pairwise.complete.obs')
+ggcorrplot(corr, lab = TRUE)
+
+```
+There is a quite high correlation between the Customer Age and the months on book (period of relationship with the bank). This is an example of multicollinearity.
+
+4. Categorical Variable Distribution
+
+```{r}
+BankData %>%
+  dplyr::select(-Attrition_Flag) %>% 
+  keep(is.factor) %>%
+  gather() %>%
+  group_by(key, value) %>% 
+  summarize(n = n()) %>% 
+  ggplot() +
+  geom_bar(mapping=aes(x = value, y = n, fill=key), color="black", stat='identity') + 
+  coord_flip() +
+  facet_wrap(~ key, scales = "free") +
+  theme_minimal() +
+  theme(legend.position = 'none')
+
+```
+From the graph above, we can see that:
+- Most of the bank customers purchased the blue Card.
+
+- Most of the Bank Customers are graduates.
+
+- Most of the Bank customers are female.
+
+-Most of the Bank customers income are less than $40k.
+
+
+### **5. Build Predictive Models**
+
+Data partition is done by using a stratified sampling approach. Stratified sampling is a method where the sampling from a population is partitioned into subpopulations based on specific characteristics (gender, education level and many more). They are independent subpopulations.
+
+
+
+The dataset is split into train and test data. 70% of the data are set as a train data and the others are concluded as the test data.
+```{r}
+set.seed(1234)
+sample_set <- BankData %>%
+  pull(.) %>% 
+  sample.split(SplitRatio = .7)
+
+bankTrain <- subset(BankData, sample_set == TRUE)
+bankTest <- subset(BankData, sample_set == FALSE)
+```
+```{r}
+round(prop.table(table(bankTest$Attrition_Flag)),3)
+```
+
+### **6. Regression**
+
+```{r}
+## To see every column in dataframe(transposed version)
+glimpse(BankData)
+
+```
+
+
+```{r}
+## Select the variables to use  
+BankData<-select(BankData, Attrition_Flag, Customer_Age, Gender, Education_Level,Income_Category, Card_Category)
+dim(BankData)
+```
+
+```{r}
+str(BankData)
+```
+
+```{r}
+BankData %>% tabyl(Gender, Education_Level,Income_Category)
+```
+
+```{r}
+#i) Attribution Flag
+table(BankData$Attrition_Flag)
+```
+
+```{r}
+# ii) Education level
+table(BankData$Education_Level) 
+```
+
+```{r}
+#iii) Gender
+table(BankData$Gender)
+```
+
+```{r}
+#v) income category
+table(BankData$Income_Category)
+```
+
+```{r}
+#iv) card category
+table(BankData$Card_Category)
+```
+
+```{r}
+p1<-ggplot(BankData, aes(x=Education_Level, fill= Gender))+ geom_bar()
+p1
+```
+
+```{r}
+p2<-ggplot(BankData, aes(x=Attrition_Flag, fill= Gender))+ geom_bar()
+p2
+```
+
+```{r}
+p3<-ggplot(BankData, aes(x=Card_Category , fill= Gender))+ geom_bar()
+p3
+```
+The total variable that has been choose is 6 with 10127 rows. Result from the table:
+
+i. In education level for graduate has the most credit card holder count for both gender.
+
+ii. Both gender has the most in existing customer for customer activity in credit card holder.
+
+iii. Blue card hast the highest use for both gender
+
+To determine if there any significant differences between customer age and income category
+
+Using ANOVA to test is there any significant differences between customer age and income category.
+
+
+```{r}
+#install.packages("ggpubr")
+library(ggpubr) 
+res.aov<- aov(Customer_Age~Income_Category, BankData)
+summary(res.aov)
+```
+
+```{r}
+box_plot <- ggplot(BankData, aes(x = Customer_Age, y = Income_Category))
+box_plot +geom_boxplot()
+```
+
+Hypothesis Test
+
+H0 : There is no significant difference between customer age and income
+category H1 : There is significant difference between customer age and income category
+
+p-value=0.000309 *** < 0.05, reject H0.
+
+At alpha =.0.05, there is enough evidence to reject H0. Therefore, there is significant difference between customer age on income category
+
+Result from boxplot:
+
+Normal skewness = $40-k-60k and $60k-80k (symmetric)
+
+Positive skewness = Unknown and less than $40k
+
+Negative skewness = $80k-$120k and $120k+
+
+Outliers = 4
+
+Plot for normality between customer age on income category
+
+```{r}
+plot(res.aov, 2) 
+```
+
+As almost all point fall approximately along reference line,can assume normality. Get 3 outliers which are 152, 252, and 255.
+
+To determine the relationship exits between income category and education level
+
+Finding the relationship for both categorical variables.
+
+
+```{r}
+chisq.test(BankData$Income_Category, BankData$Education_Level)
+```
+
+
+```{r}
+p4<-ggplot(BankData, aes(x=Education_Level , fill= Income_Category))+ geom_bar()
+p4
+```
+H0 : There is no relationship exits between income category and education level (Independent) H1 : There is a relationship exits between income category and education level (Dependent)
+
+P-value = 0.03655< 0.05, reject H0.
+
+At alpha =.0.05, there is enough evidence to reject H0. Therefore, there is a relationship exits between income category and education level (Dependent)
+
+Result from bar graph: The most credit card holder for income category is less than $40k and education level is graduate.
+
+
+### **7. Classification**
+
+1. Decision Tree
+
+Decision tree splits the data into multiple sets and each set is further split into subsets until a decision is made. 
+
+```{r}
+ctrl <-
+  trainControl(method = "cv", #cross-validation
+               number = 10, #10-fold
+               selectionFunction = "best")
+
+grid <- 
+  expand.grid(
+    .cp = seq(from=0.0001, to=0.005, by=0.0001)
+  )
+set.seed(1234)
+tree.mod <-
+  train(
+    Attrition_Flag ~.,
+    data = bankTrain,
+    method = "rpart",
+    metric = "Kappa",
+    trControl = ctrl,
+    tuneGrid = grid
+  )
+
+tree.mod
+
+```
+
+```{r}
+## Make predictions based on our candidate model
+tree.pred.prob <- predict(tree.mod, bankTest, type = "prob")
+tree.pred <- predict(tree.mod, bankTest, type = "raw")
+
+```
+
+```{r}
+confusionMatrix(tree.pred, bankTest$Attrition_Flag)
+```
+
+2. eXtreme Gradient Boosting
+
+eXtreme Gradient Boosting algorithm can be used for supervised learning tasks such as Regression, Classification and Ranking. It produces a prediction model in the form of an ensemble of weak prediction models like decision trees. It is a more reqularised model formalization to control over-fitting, which gives a better performance and completes in a high speed. 
+
+```{r}
+## Create a control object
+ctrl <-
+  trainControl(method = "cv",
+               number = 10,
+               selectionFunction = "best")
+
+modelLookup("xgbTree")
+```
+```{r}
+## Grid Search
+grid <- expand.grid(
+  nrounds = 40,
+  max_depth = c(4,5,6,7,8),
+  eta =  c(0.1,0.2,0.3,0.4,0.5),
+  gamma = 0.01,
+  colsample_bytree = 1,
+  min_child_weight = 1,
+  subsample = c(0.5, 1)
+)
+
+## Build XGBoost
+set.seed(1234)
+xgb.mod <-
+  train(
+    Attrition_Flag ~ .,
+    data = BankData,
+    method = "xgbTree",
+    metric = "Kappa",
+    trControl = ctrl,
+    tuneGrid = grid
+  )
+?train
+```
+
+```{r}
+xgb.mod
+```
+
+To make the prediction.
+
+
+```{r}
+## Make the prediction
+xgb.pred <- predict(xgb.mod, bankTest, type = "raw")
+xgb.pred.prob <- predict(xgb.mod, bankTest, type = "prob")
+```
+
+View the confusion matrix of XGBoost
+
+```{r}
+str(bankTest)
+```
+
+```{r}
+confusionMatrix(xgb.pred, bankTest$Attrition_Flag)
+```
+
+
+### **7. Comparing the Classification Model Performance**
+
+```{r}
+
+## Classification Tree
+test <- bankTest$Attrition_Flag
+pred <- tree.pred
+prob <- tree.pred.prob[,2]
+
+## Classification Tree ROC Curve
+roc.pred <- prediction(predictions = prob, labels = test)
+roc.perf <- performance(roc.pred, measure = "tpr", x.measure = "fpr")
+plot(roc.perf, main = "ROC Curve for Bank Churn Prediction Approaches", col = 2, lwd = 2)
+abline(a = 0, b = 1, lwd = 3, lty = 2, col = 1)
+
+## Classification Tree Performance Metrics
+accuracy <- mean(test == pred)
+precision <- posPredValue(pred, test)
+recall <- sensitivity(pred, test)
+fmeasure <- (2 * precision * recall)/(precision + recall)
+confmat <- confusionMatrix(pred, test)
+kappa <- as.numeric(confmat$overall["Kappa"])
+auc <- as.numeric(performance(roc.pred, measure = "auc")@y.values)
+comparisons <- tibble(approach="Classification Tree", accuracy = accuracy, fmeasure = fmeasure,kappa = kappa, auc = auc)
+
+ ## XGBoost
+test <- bankTest$Attrition_Flag
+pred <- xgb.pred
+prob <- xgb.pred.prob[,2]
+
+# Plot ROC Curve.
+roc.pred <- prediction(predictions = prob, labels = test)
+roc.perf <- performance(roc.pred, measure = "tpr", x.measure = "fpr")
+plot(roc.perf, col=3, lwd = 2, add=TRUE)
+
+# Get extreme xboost performance metrics.
+accuracy <- mean(test == pred)
+precision <- posPredValue(pred, test)
+recall <- sensitivity(pred, test)
+fmeasure <- (2 * precision * recall)/(precision + recall)
+confmat <- confusionMatrix(pred, test)
+kappa <- as.numeric(confmat$overall["Kappa"])
+auc <- as.numeric(performance(roc.pred, measure = "auc")@y.values)
+comparisons <- comparisons %>%
+  add_row(approach="eXtreme Gradient Boosting", accuracy = accuracy, fmeasure = fmeasure, kappa = kappa, auc = auc)
+
+# Draw ROC legend.
+legend(0.6, 0.6, c('Classification Tree', 'eXtreme Gradient Boosting'), 2:3)
+```
+To make a comparison table
+
+```{r}
+knitr::kable(comparisons)
+```
+As a conclusion, we can see that:
+
+1. EXtreme Gradient Boosting provides a better percentage accuracy that Classification Tree.
+2. The classification accuracy or kappa for eXtreme Gradient Boosting is 0.16 higher than Classification Tree.
+3. The AUC Curve (measure the usefulness of a test) results is better in extreme Gradient Boosting than Classification Tree.
+4. The fmeasure (F-Score) performs better in eXtreme Gradient Boosting than Classification Tree.
+
+
+
+
