@@ -8,3 +8,4 @@ Chi Square test is used to determine is there any relationship between the incom
 For the classification modelling, decision trees and extreme gradient modelling are used for easier comparison between its accuracy. 
 
 Video Link : https://youtu.be/hBDsE8l6PQg
+Rpubs coding Link: https://rpubs.com/Fatimah_Nizam/CustomerChurnAnalysis
